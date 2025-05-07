@@ -19,7 +19,7 @@ LDFLAGS   = -L/usr/local/cuda/lib64 -lcudart
 
 PRECISION_FLAG =
 
-# Allow specifying double-precision (i.e., use make=double)
+# Allow specifying double-precision (i.e., use make type=double)
 ifeq ($(type),double)
   PRECISION_FLAG = -DUSE_DOUBLE
   TARGET         = $(TARGET)
