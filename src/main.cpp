@@ -1,9 +1,13 @@
+#include <cmath>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <unistd.h>
 #include <vector>
+#include "../include/precision.h"
+#include "../include/timing.h"
 
 // Global options
 bool         g_timing         = false;
@@ -15,6 +19,83 @@ unsigned int g_num_samples    = 10;
 double       g_interval_a     = 0.0;
 double       g_interval_b     = 10.0;
 int          g_block_size     = 256;
+
+PRECISION psi_cpu(const int n) {
+  PRECISION sum = 0.0;
+  for (int i = 1; i < n; i++) {
+    sum += static_cast<PRECISION>(1.0) / static_cast<PRECISION>(i);
+  }
+  return sum - static_cast<PRECISION>(EULER);
+}
+
+PRECISION exponentialIntegralCpu(const int n, const PRECISION x,
+                                 int max_iter_cpu, PRECISION cpu_tolerance) {
+  int       nm1 = n - 1;
+  PRECISION ans;
+  if (n < 0 || x < static_cast<PRECISION>(0.0) ||
+      (x == static_cast<PRECISION>(0.0) && (n == 0 || n == 1))) {
+    std::cerr << "Bad arguments passed to exponentialIntegralCpu (" << n << ","
+              << x << ")" << std::endl;
+    return std::numeric_limits<PRECISION>::quiet_NaN();
+  }
+  if (n == 0) {
+    if (x == static_cast<PRECISION>(0.0))
+      return MAX_VAL;
+    return std::exp(-x) / x;
+  } else {
+    if (x == static_cast<PRECISION>(0.0)) {
+      if (nm1 == 0)
+        return MAX_VAL;
+      return static_cast<PRECISION>(1.0) / static_cast<PRECISION>(nm1);
+    }
+    if (x > static_cast<PRECISION>(1.0)) {
+      PRECISION b_cf = x + static_cast<PRECISION>(n);
+      PRECISION c_cf = MAX_VAL;
+      PRECISION d_cf = static_cast<PRECISION>(1.0) / b_cf;
+      PRECISION h_cf = d_cf;
+      PRECISION a_cf;
+      PRECISION del_cf;
+      for (int i = 1; i <= max_iter_cpu; i++) {
+        a_cf = -static_cast<PRECISION>(i) * (static_cast<PRECISION>(nm1) + i);
+        b_cf += static_cast<PRECISION>(2.0);
+        d_cf   = static_cast<PRECISION>(1.0) / (a_cf * d_cf + b_cf);
+        c_cf   = b_cf + a_cf / c_cf;
+        del_cf = c_cf * d_cf;
+        h_cf *= del_cf;
+        if (std::fabs(del_cf - static_cast<PRECISION>(1.0)) <= cpu_tolerance) {
+          return h_cf * std::exp(-x);
+        }
+      }
+      return h_cf * std::exp(-x);
+    } else {
+      ans =
+          (nm1 != 0 ? static_cast<PRECISION>(1.0) / static_cast<PRECISION>(nm1)
+                    : -std::log(x) - static_cast<PRECISION>(EULER));
+      PRECISION fact = static_cast<PRECISION>(1.0);
+      PRECISION del_ps;
+      PRECISION psi_val_ps;
+      for (int i = 1; i <= max_iter_cpu; i++) {
+        fact *= -x / static_cast<PRECISION>(i);
+        if (i != nm1) {
+          del_ps =
+              -fact / (static_cast<PRECISION>(i) - static_cast<PRECISION>(nm1));
+        } else {
+          psi_val_ps = -static_cast<PRECISION>(EULER);
+          for (int ii = 1; ii <= nm1; ii++) {
+            psi_val_ps +=
+                static_cast<PRECISION>(1.0) / static_cast<PRECISION>(ii);
+          }
+          del_ps = fact * (-std::log(x) + psi_val_ps);
+        }
+        ans += del_ps;
+        if (std::fabs(del_ps) < std::fabs(ans) * cpu_tolerance) {
+          return ans;
+        }
+      }
+      return ans;
+    }
+  }
+}
 
 void printUsage() {
   printf("Usage: ./main [options]\n");
@@ -64,6 +145,7 @@ void parseArguments(int argc, char* argv[]) {
 
 int main(int argc, char* argv[]) {
   parseArguments(argc, argv);
+  std::cout << "Precision: FP" << (sizeof(PRECISION) * 8) << std::endl;
   std::cout << "Orders: " << g_n_orders << ", Samples: " << g_num_samples
             << std::endl;
   if (g_interval_a >= g_interval_b) {
@@ -81,5 +163,6 @@ int main(int argc, char* argv[]) {
   if (g_timing) {
     std::cout << "Timing enabled." << std::endl;
   }
+  std::cout << "Add calculations here." << std::endl;
   return 0;
 }
