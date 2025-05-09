@@ -21,7 +21,7 @@ PRECISION_FLAG =
 
 # Allow specifying double-precision (i.e., use make type=double)
 ifeq ($(type),double)
-  PRECISION_FLAG = -DUSE_DOUBLE
+  PRECISION_FLAG = -DDOUBLE
   TARGET         = $(TARGET)
 endif
 

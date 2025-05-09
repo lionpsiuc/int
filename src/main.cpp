@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iomanip>
@@ -100,22 +101,22 @@ PRECISION exponentialIntegralCpu(const int n, const PRECISION x,
 void printUsage() {
   printf("Usage: ./main [options]\n");
   printf("Options:\n");
-  printf("  -h              Show this help message and exit.\n");
+  printf("  -h              Show this help message and exit\n");
   printf("  -n <orders>     Maximum order of the exponential integral "
-         "(default: %u).\n",
+         "(default: %u)\n",
          g_n_orders);
-  printf("  -m <samples>    Number of samples in the interval (default: %u).\n",
+  printf("  -m <samples>    Number of samples in the interval (default: %u)\n",
          g_num_samples);
-  printf("  -a <start>      Start of the interval (default: %.1f).\n",
+  printf("  -a <start>      Start of the interval (default: %.1f)\n",
          g_interval_a);
-  printf("  -b <end>        End of the interval (default: %.1f).\n",
+  printf("  -b <end>        End of the interval (default: %.1f)\n",
          g_interval_b);
-  printf("  -i <iter>       Maximum number of iterations (default: %d).\n",
+  printf("  -i <iter>       Maximum number of iterations (default: %d)\n",
          g_max_iterations);
-  printf("  -l <blk_size>   CUDA block size (default: %d).\n", g_block_size);
-  printf("  -c              Skip CPU computation.\n");
-  printf("  -g              Skip GPU computation.\n");
-  printf("  -t              Show timing information.\n");
+  printf("  -l <blk_size>   CUDA block size (default: %d)\n", g_block_size);
+  printf("  -c              Skip CPU computation\n");
+  printf("  -g              Skip GPU computation\n");
+  printf("  -t              Show timing information\n");
 }
 
 void parseArguments(int argc, char* argv[]) {
@@ -136,7 +137,7 @@ void parseArguments(int argc, char* argv[]) {
       case 'i': g_max_iterations = atoi(optarg); break;
       case 'l': g_block_size = atoi(optarg); break;
       default:
-        std::cerr << "Invalid option given." << std::endl;
+        std::cerr << "Invalid option given" << std::endl;
         printUsage();
         exit(EXIT_FAILURE);
     }
@@ -145,24 +146,54 @@ void parseArguments(int argc, char* argv[]) {
 
 int main(int argc, char* argv[]) {
   parseArguments(argc, argv);
-  std::cout << "Precision: FP" << (sizeof(PRECISION) * 8) << std::endl;
-  std::cout << "Orders: " << g_n_orders << ", Samples: " << g_num_samples
-            << std::endl;
+  std::cout << "\n";
+  std::cout << "Precision:      FP" << (sizeof(PRECISION) * 8) << std::endl;
+  std::cout << "Orders:         1 - " << g_n_orders << " (max "
+            << g_max_iterations << " iterations)\n";
+  std::cout << "Samples:        " << g_num_samples << " in [" << std::fixed
+            << std::setprecision(4) << g_interval_a << ", " << g_interval_b
+            << "]\n";
   if (g_interval_a >= g_interval_b) {
-    std::cerr << "Incorrect interval." << std::endl;
+    std::cerr << "Incorrect interval" << std::endl;
     return 1;
   }
   if (g_n_orders == 0) {
-    std::cerr << "Incorrect orders." << std::endl;
+    std::cerr << "Incorrect orders" << std::endl;
     return 1;
   }
   if (g_num_samples == 0) {
-    std::cerr << "Incorrect number of samples." << std::endl;
+    std::cerr << "Incorrect number of samples" << std::endl;
     return 1;
   }
-  if (g_timing) {
-    std::cout << "Timing enabled." << std::endl;
+  std::vector<PRECISION> samples_host(g_num_samples);
+  double                 division =
+      (g_interval_b - g_interval_a) / static_cast<double>(g_num_samples);
+  for (unsigned int i = 0; i < g_num_samples; ++i) {
+    samples_host[i] = static_cast<PRECISION>(g_interval_a + (i + 1) * division);
   }
-  std::cout << "Add calculations here." << std::endl;
+  std::vector<PRECISION> results_cpu_flat;
+  double                 time_total_cpu = 0.0;
+  if (!g_skip_cpu) {
+    results_cpu_flat.resize((size_t) g_n_orders * g_num_samples);
+    double cpu_start_time = get_current_time();
+    for (unsigned int order_idx = 0; order_idx < g_n_orders; ++order_idx) {
+      for (unsigned int sample_idx = 0; sample_idx < g_num_samples;
+           ++sample_idx) {
+        int current_n = order_idx + 1;
+        results_cpu_flat[order_idx * g_num_samples + sample_idx] =
+            exponentialIntegralCpu(current_n, samples_host[sample_idx],
+                                   g_max_iterations, EPSILON);
+      }
+    }
+    time_total_cpu = get_current_time() - cpu_start_time;
+    if (g_timing && !g_skip_cpu) {
+      std::cout << "\nCPU Time (calculation): " << std::fixed
+                << std::setprecision(6) << time_total_cpu << " s\n";
+    }
+  }
+  if (!g_skip_gpu) {
+    std::cout << "\nAdd GPU calculations here here" << std::endl;
+  }
+  std::cout << std::endl;
   return 0;
 }
