@@ -1,6 +1,6 @@
+#include "../include/timing.h"
 #include <cstddef>
 #include <sys/time.h>
-#include "timing_utils.h"
 
 double get_current_time() {
   struct timeval current_time;
