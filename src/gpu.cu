@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdio>
 #include <cuda_runtime.h>
 #include "../include/gpu.h"
@@ -9,12 +10,81 @@
     exit(EXIT_FAILURE);                                                        \
   }
 
-// Device logic
+__device__ PRECISION psi_device(const int n) {
+  PRECISION sum = 0.0;
+  for (int i = 1; i < n; i++) {
+    sum += ONE / (PRECISION) i;
+  }
+  return sum - EULER;
+}
+
 __device__ PRECISION exponential_integral_device_logic(const int       n,
                                                        const PRECISION x,
                                                        PRECISION tolerance,
                                                        int max_iter_kernel) {
-  return static_cast<PRECISION>(0.0); // Placeholder
+  int       nm1 = n - 1;
+  PRECISION ans;
+  if (n < 0 || x < 0.0f || (x == 0.0f && (n == 0 || n == 1))) {
+    return -1.0f;
+  }
+  if (n == 0) {
+    if (x == 0.0f)
+      return MAX_VAL;
+    return exp(-x) / x;
+  } else {
+    if (x == 0.0f) {
+      if (nm1 == 0)
+        return MAX_VAL;
+      return ONE / (PRECISION) nm1;
+    }
+    if (x > ONE) {
+      PRECISION b_cf = x + (PRECISION) n;
+      PRECISION c_cf = MAX_VAL;
+      PRECISION d_cf = ONE / b_cf;
+      PRECISION h_cf = d_cf;
+      PRECISION a_cf;
+      PRECISION del_cf;
+      for (int i = 1; i <= max_iter_kernel; i++) {
+        a_cf = -(PRECISION) i * ((PRECISION) nm1 + i);
+        b_cf += 2.0f;
+        d_cf = ONE / (a_cf * d_cf + b_cf);
+
+        // Check for c_cf being zero to prevent division by zero if it happens
+        if (fabs(c_cf) < EPSILON)
+          c_cf = EPSILON; // Avoid division by zero
+
+        c_cf   = b_cf + a_cf / c_cf;
+        del_cf = c_cf * d_cf;
+        h_cf *= del_cf;
+        if (fabs(del_cf - ONE) <= tolerance) {
+          return h_cf * exp(-x);
+        }
+      }
+      return h_cf * exp(-x); // Max iterations reached
+    } else {                 // Power series
+      ans            = (nm1 != 0 ? ONE / (PRECISION) nm1 : -log(x) - EULER);
+      PRECISION fact = ONE;
+      PRECISION del_ps;
+      PRECISION psi_val_dev;
+      for (int i = 1; i <= max_iter_kernel; i++) {
+        fact *= -x / (PRECISION) i;
+        if (i != nm1) {
+          del_ps = -fact / ((PRECISION) i - (PRECISION) nm1);
+        } else {
+          psi_val_dev = -EULER;
+          for (int ii = 1; ii <= nm1; ii++) {
+            psi_val_dev += ONE / (PRECISION) ii;
+          }
+          del_ps = fact * (-log(x) + psi_val_dev);
+        }
+        ans += del_ps;
+        if (fabs(del_ps) < fabs(ans) * tolerance) {
+          return ans;
+        }
+      }
+      return ans;
+    }
+  }
 }
 
 __global__ void exponential_integral_kernel(const PRECISION* d_samples,
