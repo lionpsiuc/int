@@ -92,8 +92,17 @@ __global__ void exponential_integral_kernel(const PRECISION* d_samples,
                                             int       num_samples,
                                             PRECISION tolerance,
                                             int       max_iterations_kernel) {
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx == 0 && blockIdx.y == 0) {
+  int sample_idx     = blockIdx.x * blockDim.x + threadIdx.x;
+  int order_loop_idx = blockIdx.y;
+  if (sample_idx < num_samples && order_loop_idx < max_order) {
+    int       n_val = order_loop_idx + 1; // E_1, E_2, ..., E_max_order
+    PRECISION x_val = d_samples[sample_idx];
+
+    // Calculate flat index for results array: results[order_idx][sample_idx]
+    size_t flat_idx = (size_t) order_loop_idx * num_samples + sample_idx;
+
+    d_results[flat_idx] = exponential_integral_device_logic(
+        n_val, x_val, tolerance, max_iterations_kernel);
   }
 }
 
