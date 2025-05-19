@@ -106,16 +106,49 @@ __global__ void exponential_integral_kernel(const PRECISION* d_samples,
   }
 }
 
-void batch_exponential_integral_gpu(
-    const std::vector<PRECISION>& host_samples, int max_order, int num_samples,
-    PRECISION tolerance, int max_iterations_gpu,
-    std::vector<PRECISION>& host_results_gpu, // Output parameter
-    CudaTimings&            timings,          // Output parameter
-    int block_size, int device_id) {
-  timings.setup_time         = 0.0f;
-  timings.allocation_time    = 0.0f;
-  timings.transfer_to_time   = 0.0f;
-  timings.computation_time   = 0.0f;
-  timings.transfer_from_time = 0.0f;
-  timings.total_gpu_time     = 0.0f;
+void batch_exponential_integral_gpu(const std::vector<PRECISION>& host_samples,
+                                    int max_order, int num_samples,
+                                    PRECISION tolerance, int max_iterations_gpu,
+                                    std::vector<PRECISION>& host_results_gpu,
+                                    CudaTimings& timings, int block_size,
+                                    int device_id) {
+  cudaEvent_t start_event, stop_event;
+  CUDA_CHECK(cudaEventCreate(&start_event));
+  CUDA_CHECK(cudaEventCreate(&stop_event));
+  CUDA_CHECK(cudaSetDevice(device_id));
+
+  // Setup
+  CUDA_CHECK(cudaEventRecord(start_event, 0));
+  CUDA_CHECK(cudaEventRecord(stop_event, 0));
+  CUDA_CHECK(cudaEventSynchronize(stop_event)); // Ensure event is processed
+  CUDA_CHECK(
+      cudaEventElapsedTime(&timings.setup_time, start_event, stop_event));
+  timings.setup_time /= 1000.0f;
+
+  // Memory allocation
+  CUDA_CHECK(cudaEventRecord(start_event, 0));
+  PRECISION* d_samples          = nullptr;
+  PRECISION* d_results          = nullptr; // For the entire results matrix
+  size_t     samples_size_bytes = (size_t) num_samples * sizeof(PRECISION);
+  size_t     results_size_bytes =
+      (size_t) max_order * num_samples * sizeof(PRECISION);
+  CUDA_CHECK(cudaMalloc(&d_samples, samples_size_bytes));
+  CUDA_CHECK(cudaMalloc(&d_results, results_size_bytes));
+  CUDA_CHECK(cudaEventRecord(stop_event, 0));
+  CUDA_CHECK(cudaEventSynchronize(stop_event));
+  CUDA_CHECK(
+      cudaEventElapsedTime(&timings.allocation_time, start_event, stop_event));
+  timings.allocation_time /= 1000.0f;
+
+  // Host to device
+  CUDA_CHECK(cudaEventRecord(start_event, 0));
+  CUDA_CHECK(cudaMemcpy(d_samples, host_samples.data(), samples_size_bytes,
+                        cudaMemcpyHostToDevice));
+  CUDA_CHECK(cudaEventRecord(stop_event, 0));
+  CUDA_CHECK(cudaEventSynchronize(stop_event));
+  CUDA_CHECK(
+      cudaEventElapsedTime(&timings.transfer_to_time, start_event, stop_event));
+  timings.transfer_to_time /= 1000.0f;
+
+  // Need to add kernel launch and so on...
 }
