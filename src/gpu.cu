@@ -150,5 +150,35 @@ void batch_exponential_integral_gpu(const std::vector<PRECISION>& host_samples,
       cudaEventElapsedTime(&timings.transfer_to_time, start_event, stop_event));
   timings.transfer_to_time /= 1000.0f;
 
-  // Need to add kernel launch and so on...
+  // Kernel execution
+  dim3 threads_per_block(block_size);
+  dim3 num_blocks((num_samples + block_size - 1) / block_size, max_order);
+  CUDA_CHECK(cudaEventRecord(start_event, 0));
+  exponential_integral_kernel<<<num_blocks, threads_per_block>>>(
+      d_samples, d_results, max_order, num_samples, tolerance,
+      max_iterations_gpu);
+  cudaError_t kernel_err = cudaGetLastError();
+  if (kernel_err != cudaSuccess) {
+    fprintf(stderr, "Kernel launch error: %s\n",
+            cudaGetErrorString(kernel_err));
+  }
+  CUDA_CHECK(cudaDeviceSynchronize());
+  CUDA_CHECK(cudaEventRecord(stop_event, 0));
+  CUDA_CHECK(cudaEventSynchronize(stop_event));
+  CUDA_CHECK(
+      cudaEventElapsedTime(&timings.computation_time, start_event, stop_event));
+  timings.computation_time /= 1000.0f;
+
+  // Device to host
+  CUDA_CHECK(cudaEventRecord(start_event, 0));
+  host_results_gpu.resize(results_size_bytes / sizeof(PRECISION));
+  CUDA_CHECK(cudaMemcpy(host_results_gpu.data(), d_results, results_size_bytes,
+                        cudaMemcpyDeviceToHost));
+  CUDA_CHECK(cudaEventRecord(stop_event, 0));
+  CUDA_CHECK(cudaEventSynchronize(stop_event));
+  CUDA_CHECK(cudaEventElapsedTime(&timings.transfer_from_time, start_event,
+                                  stop_event));
+  timings.transfer_from_time /= 1000.0f;
+
+  // Cleanup
 }
