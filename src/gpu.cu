@@ -120,7 +120,7 @@ void batch_exponential_integral_gpu(const std::vector<PRECISION>& host_samples,
   // Setup
   CUDA_CHECK(cudaEventRecord(start_event, 0));
   CUDA_CHECK(cudaEventRecord(stop_event, 0));
-  CUDA_CHECK(cudaEventSynchronize(stop_event)); // Ensure event is processed
+  CUDA_CHECK(cudaEventSynchronize(stop_event));
   CUDA_CHECK(
       cudaEventElapsedTime(&timings.setup_time, start_event, stop_event));
   timings.setup_time /= 1000.0f;
@@ -128,7 +128,7 @@ void batch_exponential_integral_gpu(const std::vector<PRECISION>& host_samples,
   // Memory allocation
   CUDA_CHECK(cudaEventRecord(start_event, 0));
   PRECISION* d_samples          = nullptr;
-  PRECISION* d_results          = nullptr; // For the entire results matrix
+  PRECISION* d_results          = nullptr;
   size_t     samples_size_bytes = (size_t) num_samples * sizeof(PRECISION);
   size_t     results_size_bytes =
       (size_t) max_order * num_samples * sizeof(PRECISION);
@@ -181,4 +181,8 @@ void batch_exponential_integral_gpu(const std::vector<PRECISION>& host_samples,
   timings.transfer_from_time /= 1000.0f;
 
   // Cleanup
+  CUDA_CHECK(cudaFree(d_samples));
+  CUDA_CHECK(cudaFree(d_results));
+  CUDA_CHECK(cudaEventDestroy(start_event));
+  CUDA_CHECK(cudaEventDestroy(stop_event));
 }
