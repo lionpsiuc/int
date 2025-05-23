@@ -7,6 +7,7 @@
 #include <string>
 #include <unistd.h>
 #include <vector>
+#include "../include/gpu.h"
 #include "../include/precision.h"
 #include "../include/timing.h"
 
@@ -147,35 +148,34 @@ void parseArguments(int argc, char* argv[]) {
 int main(int argc, char* argv[]) {
   parseArguments(argc, argv);
   std::cout << "\n";
-  std::cout << "Precision:      FP" << (sizeof(PRECISION) * 8) << std::endl;
-  std::cout << "Orders:         1 - " << g_n_orders << " (max "
-            << g_max_iterations << " iterations)\n";
   std::cout << "Samples:        " << g_num_samples << " in [" << std::fixed
             << std::setprecision(4) << g_interval_a << ", " << g_interval_b
             << "]\n";
-  if (g_interval_a >= g_interval_b) {
-    std::cerr << "Incorrect interval" << std::endl;
+  std::cout << "Orders:         1 - " << g_n_orders << " (max "
+            << g_max_iterations << " iterations)\n";
+  std::cout << "Precision:      FP" << (sizeof(PRECISION) * 8) << "\n";
+
+  // Sanity checks
+  if (g_interval_a >= g_interval_b || g_n_orders == 0 || g_num_samples == 0 ||
+      g_block_size <= 0) {
+    std::cerr << "Invalid input parameters" << std::endl;
+    printUsage();
     return 1;
   }
-  if (g_n_orders == 0) {
-    std::cerr << "Incorrect orders" << std::endl;
-    return 1;
-  }
-  if (g_num_samples == 0) {
-    std::cerr << "Incorrect number of samples" << std::endl;
-    return 1;
-  }
+
   std::vector<PRECISION> samples_host(g_num_samples);
   double                 division =
       (g_interval_b - g_interval_a) / static_cast<double>(g_num_samples);
   for (unsigned int i = 0; i < g_num_samples; ++i) {
     samples_host[i] = static_cast<PRECISION>(g_interval_a + (i + 1) * division);
   }
+
   std::vector<PRECISION> results_cpu_flat;
   double                 time_total_cpu = 0.0;
+
   if (!g_skip_cpu) {
     results_cpu_flat.resize((size_t) g_n_orders * g_num_samples);
-    double cpu_start_time = get_current_time();
+    double cpu_start_time = get_current_time_double();
     for (unsigned int order_idx = 0; order_idx < g_n_orders; ++order_idx) {
       for (unsigned int sample_idx = 0; sample_idx < g_num_samples;
            ++sample_idx) {
@@ -185,15 +185,59 @@ int main(int argc, char* argv[]) {
                                    g_max_iterations, EPSILON);
       }
     }
-    time_total_cpu = get_current_time() - cpu_start_time;
-    if (g_timing && !g_skip_cpu) {
-      std::cout << "\nCPU Time (calculation): " << std::fixed
+    time_total_cpu = get_current_time_double() - cpu_start_time;
+  }
+
+  std::vector<PRECISION> results_gpu_flat; // Already declared
+  CudaTimings            gpu_timings = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+
+  if (!g_skip_gpu) {
+    // GPU overall timing starts here
+    double gpu_overall_start_time = get_current_time_double();
+    batch_exponential_integral_gpu(
+        samples_host, g_n_orders, g_num_samples,
+        static_cast<PRECISION>(EPSILON), g_max_iterations,
+        results_gpu_flat, // GPU results will be stored here
+        gpu_timings,      // Detailed CUDA event timings
+        g_block_size, g_device_id);
+    gpu_timings.total_gpu_time =
+        get_current_time_double() - gpu_overall_start_time;
+  }
+
+  // Moved some prints here for better flow after GPU device is set
+  std::cout << "Tolerance:      " << std::scientific << std::setprecision(2)
+            << static_cast<double>(EPSILON) << "\n";
+  std::cout << "Device:         " << g_device_id << "\n";
+  std::cout << "Block size:     " << g_block_size << "\n";
+  std::cout << "Implementation: basic_cuda" << std::endl;
+
+  // Placeholder for comparison and detailed timing output
+  if (!g_skip_cpu && !g_skip_gpu) {
+    std::cout << "\n\t(Comparison results will be added here)\n";
+  }
+
+  if (g_timing) {
+    std::cout << "\n\t--- TIMING INFORMATION ---\n";
+    if (!g_skip_cpu) {
+      std::cout << "\tCPU Total Time:         " << std::fixed
                 << std::setprecision(6) << time_total_cpu << " s\n";
     }
+    if (!g_skip_gpu) {
+      std::cout << "\tGPU Total Time (Overall): " << std::fixed
+                << std::setprecision(6) << gpu_timings.total_gpu_time << " s\n";
+      std::cout << "\t  GPU Setup:            " << gpu_timings.setup_time
+                << " s\n";
+      std::cout << "\t  GPU Allocation:       " << gpu_timings.allocation_time
+                << " s\n";
+      std::cout << "\t  GPU HtoD Transfer:    " << gpu_timings.transfer_to_time
+                << " s\n";
+      std::cout << "\t  GPU Computation:      " << gpu_timings.computation_time
+                << " s\n";
+      std::cout << "\t  GPU DtoH Transfer:    "
+                << gpu_timings.transfer_from_time << " s\n";
+    }
   }
-  if (!g_skip_gpu) {
-    std::cout << "\nAdd GPU calculations here here" << std::endl;
-  }
+
   std::cout << std::endl;
   return 0;
 }
