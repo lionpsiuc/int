@@ -30,7 +30,7 @@ __device__ PRECISION exponential_integral_device_logic(const int       n,
   if (n == 0) {
     if (x == 0.0f)
       return MAX_VAL;
-    return exp(-x) / x;
+    return EXP(-x) / x;
   } else {
     if (x == 0.0f) {
       if (nm1 == 0)
@@ -50,19 +50,19 @@ __device__ PRECISION exponential_integral_device_logic(const int       n,
         d_cf = ONE / (a_cf * d_cf + b_cf);
 
         // Check for c_cf being zero to prevent division by zero if it happens
-        if (fabs(c_cf) < EPSILON)
+        if (ABS(c_cf) < EPSILON)
           c_cf = EPSILON; // Avoid division by zero
 
         c_cf   = b_cf + a_cf / c_cf;
         del_cf = c_cf * d_cf;
         h_cf *= del_cf;
-        if (fabs(del_cf - ONE) <= tolerance) {
-          return h_cf * exp(-x);
+        if (ABS(del_cf - ONE) <= tolerance) {
+          return h_cf * EXP(-x);
         }
       }
-      return h_cf * exp(-x); // Max iterations reached
+      return h_cf * EXP(-x); // Max iterations reached
     } else {                 // Power series
-      ans            = (nm1 != 0 ? ONE / (PRECISION) nm1 : -log(x) - EULER);
+      ans            = (nm1 != 0 ? ONE / (PRECISION) nm1 : -LOG(x) - EULER);
       PRECISION fact = ONE;
       PRECISION del_ps;
       PRECISION psi_val_dev;
@@ -75,10 +75,10 @@ __device__ PRECISION exponential_integral_device_logic(const int       n,
           for (int ii = 1; ii <= nm1; ii++) {
             psi_val_dev += ONE / (PRECISION) ii;
           }
-          del_ps = fact * (-log(x) + psi_val_dev);
+          del_ps = fact * (-LOG(x) + psi_val_dev);
         }
         ans += del_ps;
-        if (fabs(del_ps) < fabs(ans) * tolerance) {
+        if (ABS(del_ps) < ABS(ans) * tolerance) {
           return ans;
         }
       }
