@@ -110,12 +110,10 @@ void batch_exponential_integral_gpu(const std::vector<PRECISION>& host_samples,
                                     int max_order, int num_samples,
                                     PRECISION tolerance, int max_iterations_gpu,
                                     std::vector<PRECISION>& host_results_gpu,
-                                    CudaTimings& timings, int block_size,
-                                    int device_id) {
+                                    CudaTimings& timings, int block_size) {
   cudaEvent_t start_event, stop_event;
   CUDA_CHECK(cudaEventCreate(&start_event));
   CUDA_CHECK(cudaEventCreate(&stop_event));
-  CUDA_CHECK(cudaSetDevice(device_id));
 
   // Setup
   CUDA_CHECK(cudaEventRecord(start_event, 0));

@@ -18,6 +18,6 @@ void batch_exponential_integral_gpu(
     PRECISION tolerance, int max_iterations_gpu,
     std::vector<PRECISION>& host_results_gpu, // Output parameter
     CudaTimings&            timings,          // Output parameter
-    int block_size, int device_id);
+    int                     block_size);
 
 #endif // GPU_H
