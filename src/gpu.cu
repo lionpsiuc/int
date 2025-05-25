@@ -1,11 +1,11 @@
 #include <cmath>
 #include <cstdio>
-#include <cuda_runtime.h>
+
 #include "../include/gpu.h"
 
 #define CUDA_CHECK(err)                                                        \
   if (err != cudaSuccess) {                                                    \
-    fprintf(stderr, "CUDA Error: %s at %s:%d\n", cudaGetErrorString(err),      \
+    fprintf(stderr, "CUDA error: %s at %s:%d\n", cudaGetErrorString(err),      \
             __FILE__, __LINE__);                                               \
     exit(EXIT_FAILURE);                                                        \
   }
@@ -51,7 +51,7 @@ __device__ PRECISION exponential_integral_device_logic(const int       n,
 
         // Check for c_cf being zero to prevent division by zero if it happens
         if (ABS(c_cf) < EPSILON)
-          c_cf = EPSILON; // Avoid division by zero
+          c_cf = EPSILON;
 
         c_cf   = b_cf + a_cf / c_cf;
         del_cf = c_cf * d_cf;
@@ -98,7 +98,7 @@ __global__ void exponential_integral_kernel(const PRECISION* d_samples,
     int       n_val = order_loop_idx + 1; // E_1, E_2, ..., E_max_order
     PRECISION x_val = d_samples[sample_idx];
 
-    // Calculate flat index for results array: results[order_idx][sample_idx]
+    // Calculate flat index for results array
     size_t flat_idx = (size_t) order_loop_idx * num_samples + sample_idx;
 
     d_results[flat_idx] = exponential_integral_device_logic(
@@ -110,7 +110,7 @@ void batch_exponential_integral_gpu(const std::vector<PRECISION>& host_samples,
                                     int max_order, int num_samples,
                                     PRECISION tolerance, int max_iterations_gpu,
                                     std::vector<PRECISION>& host_results_gpu,
-                                    CudaTimings& timings, int block_size) {
+                                    gpu_t& timings, int block_size) {
   cudaEvent_t start_event, stop_event;
   CUDA_CHECK(cudaEventCreate(&start_event));
   CUDA_CHECK(cudaEventCreate(&stop_event));

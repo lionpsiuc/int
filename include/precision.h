@@ -14,8 +14,6 @@ typedef double PRECISION;
 #define ABS(X) fabs(X)
 #define EXP(X) exp(X)
 #define LOG(X) log(X)
-#define TGAMMA(X) tgamma(X)
-#define POW(X, Y) pow(X, Y)
 #else
 typedef float PRECISION;
 #define ONE 1.0f
@@ -25,8 +23,6 @@ typedef float PRECISION;
 #define ABS(X) fabsf(X)
 #define EXP(X) expf(X)
 #define LOG(X) logf(X)
-#define TGAMMA(X) tgammaf(X)
-#define POW(X, Y) powf(X, Y)
 #endif
 
 #endif // PRECISION_H

@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+
 #include "precision.h"
 
 double L1_diff_flat(const std::vector<PRECISION>& results1,

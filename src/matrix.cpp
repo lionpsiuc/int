@@ -1,9 +1,10 @@
-#include "../include/matrix.h"
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <vector>
+
+#include "../include/matrix.h"
 
 double L1_diff_flat(const std::vector<PRECISION>& results1,
                     const std::vector<PRECISION>& results2, int max_order,
