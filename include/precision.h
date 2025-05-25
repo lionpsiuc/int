@@ -6,6 +6,10 @@
 #include <limits>
 
 #ifdef DOUBLE
+
+/**
+ * @brief Defines the floating-point type as double.
+ */
 typedef double PRECISION;
 #define ONE 1.0
 #define EULER 0.57721566490153286060
@@ -15,6 +19,10 @@ typedef double PRECISION;
 #define EXP(X) exp(X)
 #define LOG(X) log(X)
 #else
+
+/**
+ * @brief Defines the floating-point type as float.
+ */
 typedef float PRECISION;
 #define ONE 1.0f
 #define EULER 0.5772156649f

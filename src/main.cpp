@@ -12,16 +12,24 @@
 #include "../include/precision.h"
 #include "../include/timing.h"
 
-bool         g_timing         = false;
-bool         g_skip_cpu       = false;
-bool         g_skip_gpu       = false;
-int          g_max_iterations = 2000000000;
-unsigned int g_n_orders       = 10;
-unsigned int g_num_samples    = 10;
-double       g_interval_a     = 0.0;
-double       g_interval_b     = 10.0;
-int          g_block_size     = 256;
+// Global variables for configuration, set by command-line arguments
+bool g_timing           = false; // If true, display detailed timing information
+bool g_skip_cpu         = false; // If true, skip the CPU computation
+bool g_skip_gpu         = false; // If true, skip the GPU computation
+int  g_max_iterations   = 2000000000; // Max iterations for series/fractions
+unsigned int g_n_orders = 10;         // Maximum order of exponential integral
+unsigned int g_num_samples = 10;      // Number of samples in the interval
+double       g_interval_a  = 0.0;     // Start of the sampling interval
+double       g_interval_b  = 10.0;    // End of the sampling interval
+int          g_block_size  = 256;     // CUDA block size
 
+/**
+ * @brief Computes the digamma function, psi(n), on the host.
+ *
+ * @param n The integer input to the psi function.
+ *
+ * @return The value of psi(n).
+ */
 PRECISION psi_cpu(const int n) {
   PRECISION sum = 0.0;
   for (int i = 1; i < n; i++) {
@@ -30,6 +38,16 @@ PRECISION psi_cpu(const int n) {
   return sum - EULER;
 }
 
+/**
+ * @brief Computes the exponential integral, E_n(x), on the CPU.
+ *
+ * @param n             The order of the exponential integral.
+ * @param x             The input value.
+ * @param max_iter_cpu  The maximum number of iterations for the approximation.
+ * @param cpu_tolerance The desired precision for the calculation.
+ *
+ * @return The computed value of E_n(x), or NaN with bad inputs.
+ */
 PRECISION exponentialIntegralCpu(const int n, const PRECISION x,
                                  int max_iter_cpu, PRECISION cpu_tolerance) {
   int       nm1 = n - 1;
@@ -93,6 +111,9 @@ PRECISION exponentialIntegralCpu(const int n, const PRECISION x,
   }
 }
 
+/**
+ * @brief Prints the command-line usage information.
+ */
 void printUsage() {
   printf("Usage is ./main [options], where the options are as follows:\n\n");
   printf("  -h            Show this help message and exit\n");
@@ -113,6 +134,12 @@ void printUsage() {
   printf("  -t            Show timing information\n\n");
 }
 
+/**
+ * @brief Parses command-line arguments.
+ *
+ * @param argc The argument count from main.
+ * @param argv The argument vector from main.
+ */
 void parseArguments(int argc, char* argv[]) {
   int opt;
   printf("\n");
@@ -139,6 +166,14 @@ void parseArguments(int argc, char* argv[]) {
   }
 }
 
+/**
+ * @brief Main entry point of the program.
+ *
+ * @param argc Argument count.
+ * @param argv Argument vector.
+ *
+ * @return 0 on success, 1 on failure.
+ */
 int main(int argc, char* argv[]) {
   parseArguments(argc, argv);
   if (g_interval_a >= g_interval_b) {

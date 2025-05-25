@@ -3,6 +3,16 @@
 
 #include "../include/gpu.h"
 
+/**
+ * @def   CUDA_CHECK(err)
+ * @brief A macro to check for CUDA API call errors.
+ *
+ * If a CUDA API call returns an error, this macro prints the error message, the
+ * file name, and the line number where the error occurred, and then exits the
+ * program.
+ *
+ * @param err The CUDA error code returned by a CUDA API function.
+ */
 #define CUDA_CHECK(err)                                                        \
   if (err != cudaSuccess) {                                                    \
     fprintf(stderr, "CUDA error: %s at %s:%d\n", cudaGetErrorString(err),      \
@@ -10,6 +20,13 @@
     exit(EXIT_FAILURE);                                                        \
   }
 
+/**
+ * @brief Computes the digamma function, psi(n), on the device.
+ *
+ * @param n The integer input to the psi function.
+ *
+ * @return The value of psi(n).
+ */
 __device__ PRECISION psi_device(const int n) {
   PRECISION sum = 0.0;
   for (int i = 1; i < n; i++) {
@@ -18,6 +35,21 @@ __device__ PRECISION psi_device(const int n) {
   return sum - EULER;
 }
 
+/**
+ * @brief The core logic for computing the exponential integral on the device.
+ *
+ * This function is called by the CUDA kernel. It selects the appropriate method
+ * (continued fraction or power series) based on the value of x and computes the
+ * exponential integral, E_n(x).
+ *
+ * @param n               The order of the exponential integral.
+ * @param x               The input value.
+ * @param tolerance       The precision tolerance for the computation.
+ * @param max_iter_kernel The maximum number of iterations for the
+ *                        approximation.
+ *
+ * @return The computed value of E_n(x).
+ */
 __device__ PRECISION exponential_integral_device_logic(const int       n,
                                                        const PRECISION x,
                                                        PRECISION tolerance,
@@ -87,6 +119,22 @@ __device__ PRECISION exponential_integral_device_logic(const int       n,
   }
 }
 
+/**
+ * @brief CUDA kernel for computing exponential integrals in parallel.
+ *
+ * Each thread in the grid computes one exponential integral, E_n(x), for a
+ * specific order, n, and sample, x. The grid is 2D, with one dimension mapping
+ * to samples and the other to orders.
+ *
+ * @param d_samples             Device pointer to the input samples.
+ * @param d_results             Device pointer to the output results array.
+ * @param max_order             The maximum order of the exponential integral to
+ *                              compute.
+ * @param num_samples           The total number of samples.
+ * @param tolerance             The precision tolerance for the computation.
+ * @param max_iterations_kernel The maximum number of iterations for the
+ *                              approximation methods.
+ */
 __global__ void exponential_integral_kernel(const PRECISION* d_samples,
                                             PRECISION* d_results, int max_order,
                                             int       num_samples,
@@ -106,6 +154,24 @@ __global__ void exponential_integral_kernel(const PRECISION* d_samples,
   }
 }
 
+/**
+ * @brief Computes exponential integrals for a batch of samples on the GPU.
+ *
+ * @param host_samples       A vector of input values, x,  for which to compute
+ *                           E_n(x).
+ * @param max_order          The maximum order, n, of the exponential integral
+ *                           to compute.
+ * @param num_samples        The number of samples in the input vector.
+ * @param tolerance          The desired precision for the calculation.
+ * @param max_iterations_gpu The maximum number of iterations for the series or
+ *                           continued fraction approximations on the GPU.
+ * @param host_results_gpu   A vector where the results from the GPU computation
+ *                           will be stored.
+ * @param timings            A reference to a gpu_t struct to store timing
+ *                           information.
+ * @param block_size         The size of the CUDA thread block to use for the
+ *                           kernel launch.
+ */
 void batch_exponential_integral_gpu(const std::vector<PRECISION>& host_samples,
                                     int max_order, int num_samples,
                                     PRECISION tolerance, int max_iterations_gpu,
