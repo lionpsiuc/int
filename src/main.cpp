@@ -22,6 +22,7 @@ unsigned int g_num_samples = 10;      // Number of samples in the interval
 double       g_interval_a  = 0.0;     // Start of the sampling interval
 double       g_interval_b  = 10.0;    // End of the sampling interval
 int          g_block_size  = 256;     // CUDA block size
+int          g_num_streams = 1;       // Number of CUDA streams
 
 /**
  * @brief Computes the digamma function, psi(n), on the host.
@@ -129,6 +130,8 @@ void printUsage() {
          "(default: %d)\n",
          g_max_iterations);
   printf("  -l <blk_size> CUDA block size (default: %d)\n", g_block_size);
+  printf("  -s <streams>  Number of CUDA streams (default: %d)\n",
+         g_num_streams);
   printf("  -c            Skip CPU computation\n");
   printf("  -g            Skip GPU computation\n");
   printf("  -t            Show timing information\n\n");
@@ -143,7 +146,7 @@ void printUsage() {
 void parseArguments(int argc, char* argv[]) {
   int opt;
   printf("\n");
-  while ((opt = getopt(argc, argv, "cghn:m:a:b:ti:l:")) != -1) {
+  while ((opt = getopt(argc, argv, "cghn:m:a:b:ti:l:s:")) != -1) {
     switch (opt) {
       case 'c': g_skip_cpu = true; break;
       case 'g': g_skip_gpu = true; break;
@@ -158,6 +161,7 @@ void parseArguments(int argc, char* argv[]) {
       case 't': g_timing = true; break;
       case 'i': g_max_iterations = atoi(optarg); break;
       case 'l': g_block_size = atoi(optarg); break;
+      case 's': g_num_streams = atoi(optarg); break;
       default:
         printf("\n");
         printUsage();
@@ -192,6 +196,10 @@ int main(int argc, char* argv[]) {
     std::cerr << "Block size must be positive\n" << std::endl;
     return 1;
   }
+  if (g_num_streams <= 0) {
+    std::cerr << "Number of streams must be positive\n" << std::endl;
+    return 1;
+  }
   std::vector<PRECISION> samples_host(g_num_samples);
   double                 division =
       (g_interval_b - g_interval_a) / static_cast<double>(g_num_samples);
@@ -220,7 +228,7 @@ int main(int argc, char* argv[]) {
     batch_exponential_integral_gpu(samples_host, g_n_orders, g_num_samples,
                                    static_cast<PRECISION>(EPSILON),
                                    g_max_iterations, results_gpu_flat,
-                                   gpu_timings, g_block_size);
+                                   gpu_timings, g_block_size, g_num_streams);
     gpu_timings.total_gpu_time = get_current_time() - gpu_overall_start_time;
   }
   std::cout << "Samples:    " << g_num_samples << " in [" << std::fixed
@@ -232,7 +240,7 @@ int main(int argc, char* argv[]) {
   std::cout << "Tolerance:  " << std::scientific << std::setprecision(2)
             << static_cast<double>(EPSILON) << "\n";
   std::cout << "Block Size: " << g_block_size << "\n";
-  // std::cout << "Implementation: Basic CUDA" << std::endl;
+  std::cout << "Streams:    " << g_num_streams << "\n";
   if (!g_skip_cpu && !g_skip_gpu) {
     double l1_diff       = L1_diff_flat(results_cpu_flat, results_gpu_flat,
                                         g_n_orders, g_num_samples);
@@ -267,33 +275,51 @@ int main(int argc, char* argv[]) {
     }
     if (!g_skip_gpu) {
       std::cout << "\t" << gpu_timings.total_gpu_time << "\n\n";
-      if (gpu_timings.total_gpu_time >
-          0) { // Prevent division by zero if GPU was skipped or failed fast
-        std::cout << "\tSetup\t\t\t\t" << gpu_timings.setup_time << "\t"
-                  << std::setw(5) << std::setprecision(2)
-                  << (gpu_timings.setup_time / gpu_timings.total_gpu_time *
-                      100.0)
-                  << "%\n";
-        std::cout << "\tAllocation\t\t\t" << gpu_timings.allocation_time
-                  << "\t\t" << std::setw(5) << std::setprecision(2)
-                  << (gpu_timings.allocation_time / gpu_timings.total_gpu_time *
-                      100.0)
-                  << "%\n";
-        std::cout << "\tHost to Device\t\t\t" << gpu_timings.transfer_to_time
-                  << "\t\t" << std::setw(5) << std::setprecision(2)
-                  << (gpu_timings.transfer_to_time /
-                      gpu_timings.total_gpu_time * 100.0)
-                  << "%\n";
-        std::cout << "\tComputation\t\t\t" << gpu_timings.computation_time
-                  << "\t\t" << std::setw(5) << std::setprecision(2)
-                  << (gpu_timings.computation_time /
-                      gpu_timings.total_gpu_time * 100.0)
-                  << "%\n";
-        std::cout << "\tDevice to Host\t\t\t" << gpu_timings.transfer_from_time
-                  << "\t\t" << std::setw(5) << std::setprecision(2)
-                  << (gpu_timings.transfer_from_time /
-                      gpu_timings.total_gpu_time * 100.0)
-                  << "%\n";
+      if (gpu_timings.total_gpu_time > 0) {
+        if (g_num_streams > 1) { // Timing for streamed execution
+          std::cout << "\tSetup\t\t\t\t" << gpu_timings.setup_time << "\t"
+                    << std::setw(5) << std::setprecision(2)
+                    << (gpu_timings.setup_time / gpu_timings.total_gpu_time *
+                        100.0)
+                    << "%\n";
+          std::cout << "\tAllocation\t\t\t" << gpu_timings.allocation_time
+                    << "\t\t" << std::setw(5) << std::setprecision(2)
+                    << (gpu_timings.allocation_time /
+                        gpu_timings.total_gpu_time * 100.0)
+                    << "%\n";
+          std::cout << "\tOverlapped\t\t\t" << gpu_timings.computation_time
+                    << "\t\t" << std::setw(5) << std::setprecision(2)
+                    << (gpu_timings.computation_time /
+                        gpu_timings.total_gpu_time * 100.0)
+                    << "%\n";
+        } else {
+          std::cout << "\tSetup\t\t\t\t" << gpu_timings.setup_time << "\t"
+                    << std::setw(5) << std::setprecision(2)
+                    << (gpu_timings.setup_time / gpu_timings.total_gpu_time *
+                        100.0)
+                    << "%\n";
+          std::cout << "\tAllocation\t\t\t" << gpu_timings.allocation_time
+                    << "\t\t" << std::setw(5) << std::setprecision(2)
+                    << (gpu_timings.allocation_time /
+                        gpu_timings.total_gpu_time * 100.0)
+                    << "%\n";
+          std::cout << "\tHost to Device\t\t\t" << gpu_timings.transfer_to_time
+                    << "\t\t" << std::setw(5) << std::setprecision(2)
+                    << (gpu_timings.transfer_to_time /
+                        gpu_timings.total_gpu_time * 100.0)
+                    << "%\n";
+          std::cout << "\tComputation\t\t\t" << gpu_timings.computation_time
+                    << "\t\t" << std::setw(5) << std::setprecision(2)
+                    << (gpu_timings.computation_time /
+                        gpu_timings.total_gpu_time * 100.0)
+                    << "%\n";
+          std::cout << "\tDevice to Host\t\t\t"
+                    << gpu_timings.transfer_from_time << "\t\t" << std::setw(5)
+                    << std::setprecision(2)
+                    << (gpu_timings.transfer_from_time /
+                        gpu_timings.total_gpu_time * 100.0)
+                    << "%\n";
+        }
       }
     } else {
       std::cout << "\tN/A\n";
