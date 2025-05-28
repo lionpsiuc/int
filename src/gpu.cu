@@ -45,7 +45,8 @@ __device__ PRECISION psi_device(const int n) {
  * @param n               The order of the exponential integral.
  * @param x               The input value.
  * @param tolerance       The precision tolerance for the computation.
- * @param max_iter_kernel The maximum number of iterations for the *                        approximation.
+ * @param max_iter_kernel The maximum number of iterations for the
+ *                        approximation.
  *
  * @return The computed value of E_n(x).
  */
