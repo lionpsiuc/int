@@ -209,3 +209,86 @@ CUDA streams demonstrably enable the concurrent execution of asynchronous data t
 ## 4. Overall Conclusion
 
 The GPU-accelerated implementation presented herein achieves substantial overall speedups, reaching up to approximately 11-12x that of the serial CPU counterpart, particularly when processing large-scale datasets. Single-precision (FP32) arithmetic executed on the GPU exhibits markedly higher computational throughput compared to double-precision (FP64) operations. The principal factor constraining performance is identified as the data transfer latency between the host system and the GPU device. Although CUDA streams facilitate operational overlap, their application in this data-intensive workload does not yield significant reductions in total execution time. This outcome is likely attributable to the saturation of PCIe bandwidth and the confounding influence of including host-side memory operations within the timed sections for multi-stream configurations.
+
+## 5. LLM
+
+I gave the base model of ChatGPT the following prompt:
+
+```
+I have uploaded main.cpp and Makefile which is a CPU implementation for calculating the exponential integral. Your goals is to to develop a fast CUDA implementation from the provided exponential integral source code. This code computes the integrals of the exponential functions from E_0 to E_n. Please use the following prompt:
+
+Starting from the provided source code (in exponentialIntegralCPU.tar), modify the main.cpp and add .h and .cu files that contain your cuda code to calculate both the floating point and double precision versions of the algorithm that has already been implemented in the CPU. Alter the code so the GPU code is executed unless the program is run with the "-g" flag (see the parseArguments function in the provided code, which skips the cpu part when passing a "-c" flag as an argument).
+
+The cuda implementation must time *all* the cuda parts of the code (this means including memory transfers and allocations). Add as well separate time measures for both the single and double precision versions (so we can see the difference in performance between either precision in cuda). Calculate the speedup for the total cuda timing (that is, including the memory allocations, transfers and execution) relative to the CPU.
+
+Add a numerical comparison between the results obtained from the gpu and the cpu. If any values diverge by more than 1.E-5 (which shouldn't happen), report them.
+
+There are no restrictions on which cuda techniques can be used for this assignment, except for not using libraries other than cuda itself.
+
+Run the final versions of the program with the following sizes:
+
+    -n 5000 -m 5000
+    -n 8192 -m 8192
+    -n 16384 -m 16384
+    -n 20000 -m 20000
+```
+
+The code it provided me is in the llm/ directory. Here is the output it gave me:
+
+```sh
+=============================================
+Running test with -n 5000 -m 5000
+=============================================
+CPU time: 2.721437 seconds
+GPU time (float): 1.139323 seconds — Speedup: 2.39x
+GPU time (double): 0.137090 seconds — Speedup: 19.85x
+All GPU values match CPU values within tolerance.
+
+=============================================
+Running test with -n 8192 -m 8192
+=============================================
+CPU time: 6.997257 seconds
+GPU time (float): 0.120098 seconds — Speedup: 58.26x
+GPU time (double): 0.361184 seconds — Speedup: 19.37x
+All GPU values match CPU values within tolerance.
+
+=============================================
+Running test with -n 16384 -m 16384
+=============================================
+CPU time: 26.285156 seconds
+GPU time (float): 0.475685 seconds — Speedup: 55.26x
+GPU time (double): 1.388262 seconds — Speedup: 18.93x
+All GPU values match CPU values within tolerance.
+
+=============================================
+Running test with -n 20000 -m 20000
+=============================================
+CPU time: 38.286616 seconds
+GPU time (float): 0.707308 seconds — Speedup: 54.13x
+GPU time (double): 2.022290 seconds — Speedup: 18.93x
+All GPU values match CPU values within tolerance.
+```
+
+Table 3: FP32 Performance Characteristics versus CUDA Block Size (Single Stream) for LLM Comparison
+
+| Samples (m) | Orders (n) | Block Size | CPU Time (s) | GPU Time (s) | LLM CPU Time (s) | LLM GPU Time (s) |
+| :---------- | :--------- | :--------- | :----------- | :----------- | :--------------- | :--------------- |
+| 5000 | 5000 | 256 | 0.831409 | 0.315410 | 2.721437 | 1.139323 |
+| 8192 | 8192 | 256 | 2.149745 | 0.396265 | 6.997257 | 0.120098 |
+| 16384 | 16384 | 256 | 8.099629 | 0.794310 | 26.285156 | 0.475685 |
+| 20000 | 20000 | 256 | 11.566506 | 1.036720 | 38.286616 | 0.707308 |
+
+Table 4: FP64 Performance Characteristics versus CUDA Block Size (Single Stream) for LLM Comparison
+
+| Samples (m) | Orders (n) | Block Size | CPU Time (s) | GPU Time (s) | LLM CPU Time (s) | LLM GPU Time (s) |
+| :---------- | :--------- | :--------- | :----------- | :----------- | :--------------- | :--------------- |
+| 5000 | 5000 | 256 | 1.866690 | 0.414952 | 2.721437 | 0.137090 |
+| 8192 | 8192 | 256 | 4.712366 | 0.663831 | 6.997257 | 0.361184 |
+| 16384 | 16384 | 256 | 17.697822 | 1.737309 | 26.285156 | 1.388262 |
+| 20000 | 20000 | 256 | 29.099138 | 2.455238 | 38.286616 | 2.022290 |
+
+I have simplified the LLM's code output into the two above tables.
+
+From looking at the code, the LLM does not do anything different to what I did - a simple translation of the CPU functions into GPU kernels. One thing I can think of is that I use get_current_time() which measures the wall-clock time from the host's perspective which also includes the final cleanup (e.g., cudaFree()). The LLM version uses solely cudaEvent_t and does not time cleanup. While I do use cudaEvents, I also use get_current_time() to measure cleanup. This is very possible reason for the slight difference.
+
+While it is not important since this is a CUDA course, the reason for the large values under LLM CPU Time (s) is because it measures both FP32 and FP64 together, thus resulting in a larger value.
